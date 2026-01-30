@@ -2,7 +2,7 @@ import os
 import random
 import pygame
 import math
-
+import joystick_keys as jk
 
 def run(screen):
     # ----------------------------
@@ -248,6 +248,7 @@ def run(screen):
     # ----------------------------
     while True:
         dt = clock.tick(120) / 1000.0
+        jk.update()
         if dt > 0.05:
             dt = 0.05
 

@@ -1,7 +1,7 @@
 import os
 import random
 import pygame
-
+import joystick_keys as jk
 
 def run(screen):
     clock = pygame.time.Clock()
@@ -395,6 +395,7 @@ def run(screen):
     # -----------------------
     while True:
         dt = clock.tick(120) / 1000.0
+        jk.update()
         if dt > 0.05:
             dt = 0.05
 
@@ -427,7 +428,7 @@ def run(screen):
                 elif event.key == pygame.K_UP:
                     rotate()
 
-                elif event.key == pygame.K_SPACE:
+                elif event.key == pygame.K_SPACE or event.key == pygame.K_RETURN:
                     ok = hard_drop(cell, ox, oy)
                     if not ok:
                         return {"result": "game_over", "score": int(score)}

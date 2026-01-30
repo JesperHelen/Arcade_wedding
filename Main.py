@@ -5,6 +5,7 @@ import random
 import pygame
 import importlib
 from datetime import date
+import joystick_keys as jk
 
 
 # ----------------------------
@@ -427,18 +428,18 @@ class InitialsKeyboard:
         if event.key == pygame.K_ESCAPE:
             return ("cancel", None)
 
-        if event.key == pygame.K_LEFT:
+        if event.key == pygame.K_LEFT or event.key == pygame.K_a:
             self.kx = max(0, self.kx - 1)
-        elif event.key == pygame.K_RIGHT:
+        elif event.key == pygame.K_RIGHT or event.key == pygame.K_d:
             self.kx = min(self._row_len(self.ky) - 1, self.kx + 1)
-        elif event.key == pygame.K_UP:
+        elif event.key == pygame.K_UP or event.key == pygame.K_w:
             self.ky = max(0, self.ky - 1)
             self.kx = min(self.kx, self._row_len(self.ky) - 1)
-        elif event.key == pygame.K_DOWN:
+        elif event.key == pygame.K_DOWN or event.key == pygame.K_s:
             self.ky = min(len(self.keys) - 1, self.ky + 1)
             self.kx = min(self.kx, self._row_len(self.ky) - 1)
 
-        elif event.key == pygame.K_SPACE:
+        elif event.key == pygame.K_SPACE or event.key == pygame.K_RETURN:
             key = self.keys[self.ky][self.kx]
 
             if key == "OK":
@@ -641,14 +642,14 @@ class MainMenu:
 
         n = len(self.items)
 
-        if event.key == pygame.K_LEFT:
+        if event.key == pygame.K_LEFT or event.key == pygame.K_a:
             self.selected = (self.selected - 1) % n
-        elif event.key == pygame.K_RIGHT:
+        elif event.key == pygame.K_RIGHT or event.key == pygame.K_d:
             self.selected = (self.selected + 1) % n
 
-        elif event.key == pygame.K_UP:
+        elif event.key == pygame.K_UP or event.key == pygame.K_w:
             self.selected = (self.selected - self.cols) % n
-        elif event.key == pygame.K_DOWN:
+        elif event.key == pygame.K_DOWN or event.key == pygame.K_s:
             self.selected = (self.selected + self.cols) % n
 
         elif event.key in (pygame.K_SPACE, pygame.K_RETURN):
@@ -845,6 +846,7 @@ def main():
     pending_save = None  # (fname, initials, score)
 
     while True:
+        jk.update()
         dt = clock.tick(FPS) / 1000.0
 
         for event in pygame.event.get():

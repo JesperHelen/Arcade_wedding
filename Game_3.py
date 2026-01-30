@@ -2,21 +2,12 @@ import os
 import random
 import pygame
 from collections import deque
-
+import joystick_keys as jk
 
 def run(screen):
     clock = pygame.time.Clock()
     font_big = pygame.font.SysFont("consolas", 40, bold=True)
     font = pygame.font.SysFont("consolas", 22)
-
-    # ----------------------------
-    # (valfritt) stoppa ev. bakgrundsmusik i lobby
-    # ----------------------------
-    try:
-        if pygame.mixer.get_init():
-            pygame.mixer.music.stop()
-    except Exception:
-        pass
 
     # ----------------------------
     # Helpers: asset paths
@@ -427,6 +418,7 @@ def run(screen):
     # -------------------------------------------------
     while True:
         dt = clock.tick(120) / 1000.0
+        jk.update()
         if dt > 0.05:
             dt = 0.05
 
