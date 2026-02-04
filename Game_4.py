@@ -86,7 +86,7 @@ def run(screen):
     # Input repeat (movement)
     MOVE_DAS = 0.13  # delay until repeat
     MOVE_ARR = 0.045  # repeat rate
-    SOFT_DROP_MULT = 0.09  # drop interval multiplier when holding DOWN
+    SOFT_DROP_MULT = 0.2  # drop interval multiplier when holding DOWN
 
     # Colors
     BG = (10, 10, 18)
@@ -237,6 +237,7 @@ def run(screen):
     drop_acc = 0.0
 
     # input repeat state
+    soft_drop = False
     move_left = False
     move_right = False
     das_timer = 0.0
@@ -409,7 +410,7 @@ def run(screen):
                 if event.key == pygame.K_ESCAPE:
                     return {"result": "quit", "score": int(score)}
 
-                if event.key == pygame.K_LEFT:
+                elif event.key == pygame.K_LEFT:
                     move_left = True
                     last_dir = -1
                     das_timer = 0.0
@@ -428,22 +429,30 @@ def run(screen):
                 elif event.key == pygame.K_UP:
                     rotate()
 
+                elif event.key == pygame.K_DOWN:
+                    soft_drop = True
+
                 elif event.key == pygame.K_SPACE or event.key == pygame.K_RETURN:
                     ok = hard_drop(cell, ox, oy)
                     if not ok:
                         return {"result": "game_over", "score": int(score)}
 
-            if event.type == pygame.KEYUP:
+            elif event.type == pygame.KEYUP:
                 if event.key == pygame.K_LEFT:
                     move_left = False
                     if last_dir == -1:
                         das_timer = 0.0
                         arr_timer = 0.0
+
                 elif event.key == pygame.K_RIGHT:
                     move_right = False
                     if last_dir == 1:
                         das_timer = 0.0
                         arr_timer = 0.0
+
+                elif event.key == pygame.K_DOWN:
+                    soft_drop = False
+
 
         # update
         t += dt
@@ -483,9 +492,9 @@ def run(screen):
         drop_sec = max(MIN_DROP_SEC, START_DROP_SEC - RAMP_PER_SEC * t)
 
         # soft drop
-        keys = pygame.key.get_pressed()
-        if keys[pygame.K_DOWN]:
+        if soft_drop:
             drop_sec *= SOFT_DROP_MULT
+
 
         drop_acc += dt
         while drop_acc >= drop_sec:

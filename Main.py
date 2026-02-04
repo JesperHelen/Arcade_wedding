@@ -474,9 +474,9 @@ class InitialsKeyboard:
         self.TEXT_TITLE = (230, 230, 245)
 
         self.KEY_BG = (255, 255, 255, 10)
-        self.KEY_BG_SEL = (255, 255, 255, 22)
+        self.KEY_BG_SEL = (120, 180, 255, 90)
         self.BOX_BG = (255, 255, 255, 10)
-        self.BOX_BG_SEL = (255, 255, 255, 22)
+        self.BOX_BG_SEL = (120, 180, 255, 90)
 
     def resize(self):
         self.w, self.h = self.screen.get_size()
@@ -685,12 +685,20 @@ class MainMenu:
         icon = 96
         self.card_bg = pygame.Surface((icon, icon), pygame.SRCALPHA)
         self.card_bg_sel = pygame.Surface((icon, icon), pygame.SRCALPHA)
-        pygame.draw.rect(self.card_bg, (255, 255, 255, 18), self.card_bg.get_rect(), border_radius=18)
-        pygame.draw.rect(self.card_bg_sel, (255, 255, 255, 50), self.card_bg_sel.get_rect(), border_radius=18)
+
+        # Ljus, tydlig bakgrundsplatta
+        pygame.draw.rect(
+            self.card_bg_sel,
+            (180, 210, 255, 200),   # blåvit, hög alpha
+            self.card_bg_sel.get_rect(),
+            border_radius=18
+        )
+
+        pygame.draw.rect(self.card_bg_sel, (255, 255, 255, 0), self.card_bg_sel.get_rect(), border_radius=18)
 
         self._cached_title = TEXT.render(self.title_font, TITLE, (235, 235, 255))
         self._cached_subtitle = TEXT.render(self.item_font,
-                                            "Pilar = navigera • Space/Enter = start • ESC = avsluta",
+                                            "",
                                             (180, 180, 210))
 
     def resize(self):
@@ -703,7 +711,7 @@ class MainMenu:
             return (None, None)
 
         if event.key == pygame.K_ESCAPE:
-            return ("quit", None)
+            return (None, None)
 
         n = len(self.items)
 
@@ -747,14 +755,20 @@ class MainMenu:
             r = pygame.Rect(x, y, icon, icon)
 
             is_sel = (i == self.selected)
+            # === TYDLIG RAM RUNT VALD KNAPP ===
             if is_sel:
-                pulse = 0.5 + 0.5 * math.sin(self.pulse_t * 4.0)
-                # cheap glow (cached)
-                glow_rect_cached(self.screen, r, (120, 180, 255), glow=12, corner=18)
+                # Ytterram – extremt tydlig
+                outer = r.inflate(10, 10)
+                pygame.draw.rect(
+                    self.screen,
+                    (255, 255, 255),   # helt vit, ingen alpha
+                    outer,
+                    5,
+                    border_radius=22
+                )
 
-                # pulse alpha by blitting card_bg_sel with varying alpha
-                self.card_bg_sel.set_alpha(int(35 + 30 * pulse))
-                self.screen.blit(self.card_bg_sel, r.topleft)
+
+
             else:
                 self.card_bg.set_alpha(255)
                 self.screen.blit(self.card_bg, r.topleft)
@@ -912,6 +926,15 @@ def main():
         jk.update()
         dt = clock.tick(FPS) / 1000.0
 
+        # --- SAFE QUIT: ESC + Enter + S samtidigt ---
+        keys = pygame.key.get_pressed()
+        if keys[pygame.K_ESCAPE] and (keys[pygame.K_RETURN] or keys[pygame.K_KP_ENTER]) and keys[pygame.K_s]:
+            try:
+                pygame.mixer.music.stop()
+            except Exception:
+                pass
+            pygame.quit()
+            sys.exit()
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
