@@ -1,6 +1,7 @@
 import random
 import pygame
 import joystick_keys as jk
+from typing import Set, Tuple
 
 def run(screen):
     clock = pygame.time.Clock()
@@ -63,7 +64,8 @@ def run(screen):
         rect = pygame.Rect(ox + x * CELL, oy + y * CELL, CELL, CELL)
         pygame.draw.rect(screen, color, rect, border_radius=r)
 
-    def spawn_free_cell(cols, rows, occupied: set[tuple[int, int]]):
+    def spawn_free_cell(cols, rows, occupied):
+
         # Försök slumpa inom safe bounds först
         min_x, max_x, min_y, max_y = spawn_bounds(cols, rows)
 

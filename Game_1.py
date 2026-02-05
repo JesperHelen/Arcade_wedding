@@ -236,12 +236,41 @@ def run(screen):
 
         return top_img, top_rect, pipe_img, bot_rect
 
+
     # ----------------------------
     # State
     # ----------------------------
+    def reset_game():
+        nonlocal score, t, alive
+        nonlocal bg_x, base_x, pipes, spawn_timer
+        nonlocal bird_y, bird_vy, bird_rot, bird_using_power, bird_img
+        nonlocal particles, swap_fx_time
+
+        score = 0
+        t = 0.0
+        alive = True
+
+        bg_x = 0.0
+        base_x = 0.0
+
+        pipes = []
+        spawn_timer = 0.0
+
+        bird_y = int(H * 0.40)
+        bird_vy = 0.0
+        bird_rot = 0.0
+
+        bird_using_power = False
+        bird_img = bird_base_img
+
+        particles = []
+        swap_fx_time = 0.0
+
+
     score = 0
     t = 0.0
     alive = True
+
 
     # ----------------------------
     # Main loop
@@ -322,7 +351,12 @@ def run(screen):
                         break
 
             if not alive:
+                # Om du dör innan första poängen: auto-restart direkt
+                if int(score) == 0:
+                    reset_game()
+                    continue
                 return {"result": "game_over", "score": int(score)}
+
 
         # FX update always (so explosion continues even if you die next frame)
         update_fx(dt)

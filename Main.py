@@ -7,6 +7,8 @@ import importlib
 from datetime import date
 import joystick_keys as jk
 
+import subprocess
+import re
 
 # ----------------------------
 # Config (Pi-friendly)
@@ -15,7 +17,8 @@ import joystick_keys as jk
 FPS = 30
 
 TITLE = "Arcade Machine"
-MUSIC_PATH = os.path.join("assets", "music", "music_base_1.wav")
+MUSIC_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)),"Assets", "Music", "music_base_1.mp3")
+
 
 GAME_MODULES = ["game_1", "game_2", "game_3", "game_4"]
 GAME_FILES = ["Game_1.txt", "Game_2.txt", "Game_3.txt", "Game_4.txt"]
@@ -59,6 +62,100 @@ def load_font(size: int) -> pygame.font.Font:
     f.set_bold(True)
     return f
 
+# ----------------------------
+# System Volume (pactl) + HUD
+# ----------------------------
+_VOL_RE = re.compile(r"(\d+)%")
+
+def _pactl(cmd_list):
+    # cmd_list = ["set-sink-volume", "@DEFAULT_SINK@", "50%"] etc
+    try:
+        subprocess.run(
+            ["pactl"] + cmd_list,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
+        return True
+    except Exception:
+        return False
+
+
+def get_system_volume_percent(default=50) -> int:
+    try:
+        out = subprocess.check_output(
+            ["pactl", "get-sink-volume", "@DEFAULT_SINK@"],
+            stderr=subprocess.DEVNULL,
+            text=True,
+        )
+        m = _VOL_RE.search(out)
+        if m:
+            return clamp(int(m.group(1)), 0, 150)  # pactl kan visa >100%
+    except Exception:
+        pass
+    return int(default)
+
+
+def set_system_volume_percent(p: int):
+    p = int(clamp(p, 0, 100))
+    _pactl(["set-sink-volume", "@DEFAULT_SINK@", f"{p}%"])
+    _pactl(["set-sink-mute", "@DEFAULT_SINK@", "0"])
+    return p
+
+
+def change_system_volume(delta: int, cached: int) -> int:
+    # För att slippa läsa varje gång: utgå från cached och sätt direkt.
+    newp = int(clamp(cached + int(delta), 0, 100))
+    return set_system_volume_percent(newp)
+
+
+class VolumeHUD:
+    def __init__(self, screen):
+        self.screen = screen
+        self.value = get_system_volume_percent(50)
+        self.show_t = 0.0
+        self.font = None
+
+    def set_value(self, v: int, show_seconds: float = 1.2):
+        self.value = int(clamp(v, 0, 100))
+        self.show_t = float(show_seconds)
+
+    def update(self, dt: float):
+        if self.show_t > 0:
+            self.show_t = max(0.0, self.show_t - dt)
+
+    def draw(self):
+        if self.show_t <= 0:
+            return
+
+        if self.font is None:
+            self.font = FONTS.get(14)
+
+        w, h = self.screen.get_size()
+
+        # HUD-box uppe till höger
+        box_w, box_h = 220, 46
+        pad = 16
+        x = w - box_w - pad
+        y = pad
+
+        # Bakgrund med alpha
+        box = pygame.Surface((box_w, box_h), pygame.SRCALPHA)
+        pygame.draw.rect(box, (0, 0, 0, 140), (0, 0, box_w, box_h), border_radius=12)
+        pygame.draw.rect(box, (255, 255, 255, 60), (0, 0, box_w, box_h), 2, border_radius=12)
+
+        # Bar
+        bar_x, bar_y = 12, 24
+        bar_w, bar_h = box_w - 24, 12
+        pygame.draw.rect(box, (255, 255, 255, 30), (bar_x, bar_y, bar_w, bar_h), border_radius=8)
+
+        fill_w = int(bar_w * (self.value / 100.0))
+        pygame.draw.rect(box, (140, 200, 255, 180), (bar_x, bar_y, fill_w, bar_h), border_radius=8)
+
+        label = TEXT.render(self.font, f"VOL {self.value}%", (230, 230, 245))
+        box.blit(label, (12, 8))
+
+        self.screen.blit(box, (x, y))
 
 class FontCache:
     def __init__(self):
@@ -102,17 +199,28 @@ TEXT = TextCache()
 # ----------------------------
 def resume_menu_music():
     try:
+        # init bara om den inte redan är igång
         if not pygame.mixer.get_init():
+            pygame.mixer.init()
+
+        if not os.path.exists(MUSIC_PATH):
+            print("Music missing:", MUSIC_PATH)
             return
 
-        pygame.mixer.music.unpause()
-        if not pygame.mixer.music.get_busy():
-            if os.path.exists(MUSIC_PATH):
-                pygame.mixer.music.load(MUSIC_PATH)
-                pygame.mixer.music.set_volume(0.35)
-                pygame.mixer.music.play(-1)
+        # om musik redan är igång men pausad -> unpause
+        if pygame.mixer.music.get_busy():
+            pygame.mixer.music.unpause()
+            return
+
+        # annars starta om loopen
+        pygame.mixer.music.load(MUSIC_PATH)
+        pygame.mixer.music.set_volume(1.00)  # samma som i main()
+        pygame.mixer.music.play(-1)
+
     except Exception as e:
-        print("Resume music error:", e)
+        print("resume_menu_music error:", repr(e))
+
+
 
 
 # ----------------------------
@@ -203,8 +311,8 @@ def run_game_by_index(screen, index: int):
 
     if only_game4:
         try:
-            if pygame.mixer.get_init() and pygame.mixer.music.get_busy():
-                pygame.mixer.music.pause()
+            if pygame.mixer.get_init():
+                pygame.mixer.music.stop()   # <-- byt från pause() till stop()
         except Exception:
             pass
 
@@ -894,7 +1002,10 @@ def run_competition(screen):
 # Main state machine
 # ----------------------------
 def main():
+    pygame.mixer.pre_init(44100, -16, 2, 512)
     pygame.init()
+
+
     pygame.display.set_caption(TITLE)
 
     # Flags that can help on some setups (esp. Desktop)
@@ -904,13 +1015,20 @@ def main():
 
     menu = MainMenu(screen)
     highs = HighscoreScene(screen)
+    vol_hud = VolumeHUD(screen)
+    # valfritt: sätt startvolym direkt när spelet startar
+    vol_hud.set_value(set_system_volume_percent(50), show_seconds=1.5)
+
+    enter_down = False
 
     # ---- music (loop forever) ----
     try:
+
         pygame.mixer.init()
         if os.path.exists(MUSIC_PATH):
+
             pygame.mixer.music.load(MUSIC_PATH)
-            pygame.mixer.music.set_volume(0.35)
+            pygame.mixer.music.set_volume(1.00)
             pygame.mixer.music.play(-1)
     except Exception as e:
         print("Music error:", e)
@@ -939,7 +1057,24 @@ def main():
             if event.type == pygame.QUIT:
                 pygame.quit()
                 sys.exit()
+            # Tracka Enter (för kombon Enter + Pil upp/ned)
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_LEFT:
+                    enter_down = True
 
+
+
+                # Enter + Upp/Ner => volym
+                if enter_down and event.key == pygame.K_UP:
+                    newv = change_system_volume(+5, vol_hud.value)
+                    vol_hud.set_value(newv)
+                elif enter_down and event.key == pygame.K_DOWN:
+                    newv = change_system_volume(-5, vol_hud.value)
+                    vol_hud.set_value(newv)
+
+            elif event.type == pygame.KEYUP:
+                if event.key == pygame.K_LEFT:
+                    enter_down = False
             if state == "initials":
                 act, payload = initials_ui.handle_event(event)
                 if act == "cancel":
@@ -1035,8 +1170,10 @@ def main():
         else:
             current.update(dt)
             current.draw()
-
+        vol_hud.update(dt)
+        vol_hud.draw()
         pygame.display.flip()
+
 
 
 if __name__ == "__main__":
