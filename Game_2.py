@@ -1,3 +1,5 @@
+import os
+import glob
 import random
 import pygame
 import joystick_keys as jk
@@ -39,6 +41,63 @@ def run(screen):
     SLOWMO_DURATION = 5.0
     SLOWMO_SPEED_MULT = 0.40
 
+    # ---- Assets (Assets/Snake) ----
+    def base_dir():
+        return os.path.dirname(os.path.abspath(__file__))
+
+    def snake_dir():
+        for d in (os.path.join(base_dir(), "Assets", "Snake"), os.path.join(base_dir(), "assets", "snake")):
+            if os.path.isdir(d):
+                return d
+        return os.path.join(base_dir(), "Assets", "Snake")
+
+    def load_img_safe(name):
+        try:
+            p = os.path.join(snake_dir(), name)
+            if os.path.exists(p):
+                return pygame.image.load(p).convert_alpha()
+        except Exception:
+            pass
+        return None
+
+    def load_sounds(pattern):
+        # Röster: eat_1.mp3, eat_2.mp3 ... och gameover.mp3 (wav/ogg funkar också)
+        out = []
+        if not pygame.mixer.get_init():
+            return out
+        for ext in ("mp3", "ogg", "wav"):
+            for p in sorted(glob.glob(os.path.join(snake_dir(), f"{pattern}.{ext}"))):
+                try:
+                    out.append(pygame.mixer.Sound(p))
+                except Exception:
+                    pass
+        return out
+
+    snd_eat = load_sounds("eat_*")
+    snd_gameover = load_sounds("gameover")
+
+    def play(sounds):
+        if sounds:
+            try:
+                random.choice(sounds).play()
+            except Exception:
+                pass
+
+    # Huvudet: bilden har hjässan åt höger, alltså "tittar" den åt höger.
+    # Uppåt och nedåt används samma upprätta ansikte (annars blir det upp och ned när ormen åker nedåt).
+    head_imgs = None
+    _head = load_img_safe("head.png")
+    if _head is not None:
+        target_h = int(CELL * 1.6)
+        target_w = max(1, int(_head.get_width() * target_h / _head.get_height()))
+        right = pygame.transform.smoothscale(_head, (target_w, target_h))
+        head_imgs = {
+            (1, 0): right,
+            (-1, 0): pygame.transform.flip(right, True, False),
+            (0, -1): pygame.transform.rotate(right, 90),
+            (0, 1): pygame.transform.rotate(right, 90),
+        }
+
     # ---- Helpers ----
     def grid_size():
         w, h = screen.get_size()
@@ -64,6 +123,55 @@ def run(screen):
     def draw_cell(x, y, color, ox, oy, r=6):
         rect = pygame.Rect(ox + x * CELL, oy + y * CELL, CELL, CELL)
         pygame.draw.rect(screen, color, rect, border_radius=r)
+
+    def cell_center(x, y, ox, oy):
+        return ox + x * CELL + CELL // 2, oy + y * CELL + CELL // 2
+
+    def draw_ring(x, y, ox, oy):
+        cx, cy = cell_center(x, y, ox, oy)
+        cy += CELL // 10
+        r = int(CELL * 0.36)
+        pygame.draw.circle(screen, (240, 200, 80), (cx, cy), r, max(2, CELL // 7))
+        d = max(3, CELL // 6)
+        top = cy - r - d // 2
+        stone = [(cx, top - d), (cx + d, top), (cx, top + d), (cx - d, top)]
+        pygame.draw.polygon(screen, (190, 230, 255), stone)
+        pygame.draw.polygon(screen, (255, 255, 255), stone, 1)
+
+    def draw_heart(x, y, ox, oy):
+        cx, cy = cell_center(x, y, ox, oy)
+        r = max(3, int(CELL * 0.18))
+        col = (230, 60, 90)
+        pygame.draw.circle(screen, col, (cx - r, cy - r // 2), r)
+        pygame.draw.circle(screen, col, (cx + r, cy - r // 2), r)
+        pygame.draw.polygon(screen, col, [(cx - 2 * r, cy - r // 4), (cx + 2 * r, cy - r // 4), (cx, cy + int(r * 2.2))])
+
+    def draw_veil(body, ox, oy, w, h):
+        # Kroppen som ett vitt brudslöjesläp som tunnar ut mot svansen
+        if not body:
+            return
+        layer = pygame.Surface((w, h), pygame.SRCALPHA)
+        n = len(body)
+        pad = max(2, CELL // 10)
+        for i, (sx, sy) in enumerate(body):
+            f = i / max(1, n - 1)
+            col = (int(245 - 100 * f), int(245 - 100 * f), int(255 - 90 * f))
+            rect = pygame.Rect(ox + sx * CELL + pad, oy + sy * CELL + pad, CELL - 2 * pad, CELL - 2 * pad)
+            pygame.draw.rect(layer, col, rect, border_radius=CELL // 3)
+            if i + 1 < n:
+                c1 = cell_center(sx, sy, ox, oy)
+                c2 = cell_center(*body[i + 1], ox, oy)
+                link = pygame.Rect(min(c1[0], c2[0]) - CELL // 2 + pad, min(c1[1], c2[1]) - CELL // 2 + pad,
+                                   abs(c1[0] - c2[0]) + CELL - 2 * pad, abs(c1[1] - c2[1]) + CELL - 2 * pad)
+                pygame.draw.rect(layer, col, link, border_radius=CELL // 3)
+            # spets
+            cx, cy = rect.center
+            dot = (col[0] - 45, col[1] - 45, col[2] - 40)
+            pygame.draw.circle(layer, dot, (cx - CELL // 5, cy - CELL // 5), 2)
+            pygame.draw.circle(layer, dot, (cx + CELL // 5, cy + CELL // 5), 2)
+            pygame.draw.circle(layer, dot, (cx + CELL // 5, cy - CELL // 5), 1)
+            pygame.draw.circle(layer, dot, (cx - CELL // 5, cy + CELL // 5), 1)
+        screen.blit(layer, (0, 0))
 
     def spawn_free_cell(cols, rows, occupied):
 
@@ -277,11 +385,13 @@ def run(screen):
                 nx, ny = hx + dx, hy + dy
 
                 if nx < 0 or nx >= cols or ny < 0 or ny >= rows:
+                    play(snd_gameover)
                     return {"result": "game_over", "score": int(score)}
 
                 new_head = (nx, ny)
 
                 if new_head in set(snake[:-1]):
+                    play(snd_gameover)
                     return {"result": "game_over", "score": int(score)}
 
                 snake.insert(0, new_head)
@@ -296,6 +406,7 @@ def run(screen):
 
                 if ate_main or ate_extra:
                     score += 5
+                    play(snd_eat)
                     if ate_main:
                         spawn_new_main_apple_and_maybe_powerups()
                     if ate_extra:
@@ -330,13 +441,13 @@ def run(screen):
         border = pygame.Rect(ox, oy, cols * CELL, rows * CELL)
         pygame.draw.rect(screen, (255, 170, 170, 100), border, width=2, border_radius=14)
 
-        # apples
+        # ring (huvudäpplet)
         ax, ay = main_apple
-        draw_cell(ax, ay, (255, 170, 170), ox, oy, r=999)
+        draw_ring(ax, ay, ox, oy)
 
-        # rage apples (VITA)
+        # rage-äpplen = hjärtan
         for (ex, ey) in extra_apples:
-            draw_cell(ex, ey, (245, 245, 255), ox, oy, r=999)
+            draw_heart(ex, ey, ox, oy)
 
         # powerups on map (dim over time)
         if "rage" in powerups:
@@ -351,15 +462,14 @@ def run(screen):
             c = 120 + int(135 * rem)
             draw_cell(x, y, (140, c, 255), ox, oy, r=6)
 
-        # snake
-        for i, (sx, sy) in enumerate(snake):
-            if i == 0:
-                color = (180, 220, 255)
-                r = 8
-            else:
-                color = (140, 200, 255)
-                r = 7
-            draw_cell(sx, sy, color, ox, oy, r=r)
+        # slöjan (kroppen) och huvudet
+        draw_veil(snake[1:], ox, oy, w, h)
+        hx, hy = snake[0]
+        if head_imgs is not None:
+            img = head_imgs.get(direction, head_imgs[(1, 0)])
+            screen.blit(img, img.get_rect(center=cell_center(hx, hy, ox, oy)))
+        else:
+            draw_cell(hx, hy, (180, 220, 255), ox, oy, r=8)
 
         # HUD
         base_tps = min(MAX_TPS, BASE_TPS + TPS_RAMP * t)
