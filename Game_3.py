@@ -3,6 +3,7 @@ import random
 import pygame
 from collections import deque
 import joystick_keys as jk
+import controls
 
 def run(screen):
     clock = pygame.time.Clock()
@@ -429,7 +430,10 @@ def run(screen):
                 return
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
-                    return {"result": "quit", "score": int(score)}
+                    if controls.pause(screen, "pacman") == "quit":
+                        return {"result": "quit", "score": int(score)}
+                    clock.tick()
+                    break
 
                 if event.key in (pygame.K_UP, pygame.K_w):
                     pac_next_dir = (0, -1)
@@ -472,6 +476,10 @@ def run(screen):
         pac_tps = BASE_PAC_TPS
         ghost_tps = min(MAX_GHOST_TPS, BASE_GHOST_TPS + GHOST_TPS_RAMP * t)
         chase_p = min(0.92, 0.18 + CHASE_RAMP * t)
+
+        # startpositioner, för att upptäcka när Pac-Man och ett spöke byter ruta med varandra
+        pac_start = pac_pos
+        ghost_starts = [g["pos"] for g in ghosts]
 
         # Pac ticks
         pac_tick += dt
@@ -554,8 +562,8 @@ def run(screen):
                     g["pos"] = (nx, ny)
 
         # collision handling (efter movement)
-        for g in ghosts:
-            if g["pos"] == pac_pos:
+        for g, g_start in zip(ghosts, ghost_starts):
+            if g["pos"] == pac_pos or (g["pos"] == pac_start and g_start == pac_pos):
                 if blink_active:
                     # under blink: gå igenom + fryser spöket
                     g["freeze"] = CHILI_FREEZE

@@ -3,6 +3,7 @@ import random
 import pygame
 import math
 import joystick_keys as jk
+import controls
 
 def run(screen):
     # ----------------------------
@@ -271,6 +272,67 @@ def run(screen):
     t = 0.0
     alive = True
 
+    countdown_font = pygame.font.SysFont("consolas", int(H * 0.25), bold=True)
+
+    def draw_scene():
+        screen.fill((0, 0, 0))
+        draw_tiled(bg_img, bg_x, 0)
+
+        for p in pipes:
+            top_img, top_rect, bot_img, bot_rect = pipe_rects(p, t)
+            screen.blit(top_img, top_rect.topleft)
+            screen.blit(bot_img, bot_rect.topleft)
+
+        # bird
+        b = pygame.transform.rotate(bird_img, -bird_rot)
+        br = b.get_rect(center=(bird_x, int(bird_y)))
+        screen.blit(b, br.topleft)
+
+        draw_tiled(base_img, base_x, GROUND_Y)
+
+        # FX on top
+        draw_fx()
+
+        score_per_pipe = SCORE_PER_PIPE_AFTER_150 if score >= 150 else SCORE_PER_PIPE_BEFORE_150
+        scroll = min(MAX_SCROLL, BASE_SCROLL + SCROLL_RAMP * t)
+        lines = [
+            (f"SCORE: {score}", (245, 245, 255)),
+            (f"SPEED: {scroll:0.0f}", (180, 180, 210)),
+            (f"PIPE SCORE: {score_per_pipe}", (180, 180, 210)),
+            ("BIRD: POWER" if bird_using_power else "BIRD: BASE", (180, 180, 210)),
+        ]
+        y = 18
+        for text, col in lines:
+            screen.blit(font.render(text, True, col), (24, y))
+            y += font.get_linesize()
+
+    def countdown():
+        """Fryst bild med 3-2-1 så att spelaren hinner göra sig redo. Returnerar False om spelaren avslutar."""
+        shade = pygame.Surface((W, H), pygame.SRCALPHA)
+        shade.fill((0, 0, 0, 110))
+        for n in (3, 2, 1):
+            left = 1.0
+            while left > 0:
+                jk.update()
+                for event in pygame.event.get():
+                    if event.type == pygame.QUIT:
+                        return False
+                    if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                        if controls.pause(screen, "flappy") == "quit":
+                            return False
+                        clock.tick()
+
+                draw_scene()
+                screen.blit(shade, (0, 0))
+                num = countdown_font.render(str(n), True, (255, 230, 140))
+                screen.blit(num, num.get_rect(center=(W // 2, H // 2)))
+                pygame.display.flip()
+                left -= clock.tick(60) / 1000.0
+        clock.tick()
+        return True
+
+    if not countdown():
+        return {"result": "quit", "score": int(score)}
 
     # ----------------------------
     # Main loop
@@ -294,9 +356,11 @@ def run(screen):
 
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
-                    return {"result": "quit", "score": int(score)}
+                    if controls.pause(screen, "flappy") == "quit" or not countdown():
+                        return {"result": "quit", "score": int(score)}
+                    break
 
-                if alive and event.key in (pygame.K_SPACE, pygame.K_UP, pygame.K_w):
+                if alive and event.key in (pygame.K_SPACE, pygame.K_UP, pygame.K_w, pygame.K_RETURN):
                     bird_vy = JUMP_VEL
 
         # ----- update -----
@@ -354,6 +418,8 @@ def run(screen):
                 # Om du dör innan första poängen: auto-restart direkt
                 if int(score) == 0:
                     reset_game()
+                    if not countdown():
+                        return {"result": "quit", "score": 0}
                     continue
                 return {"result": "game_over", "score": int(score)}
 
@@ -362,32 +428,5 @@ def run(screen):
         update_fx(dt)
 
         # ----- draw -----
-        screen.fill((0, 0, 0))
-        draw_tiled(bg_img, bg_x, 0)
-
-        for p in pipes:
-            top_img, top_rect, bot_img, bot_rect = pipe_rects(p, t)
-            screen.blit(top_img, top_rect.topleft)
-            screen.blit(bot_img, bot_rect.topleft)
-
-        # bird
-        b = pygame.transform.rotate(bird_img, -bird_rot)
-        br = b.get_rect(center=(bird_x, int(bird_y)))
-        screen.blit(b, br.topleft)
-
-        draw_tiled(base_img, base_x, GROUND_Y)
-
-        # FX on top
-        draw_fx()
-
-        hud = font.render(f"SCORE: {score}", True, (245, 245, 255))
-        spd = font.render(f"SPEED: {scroll:0.0f}", True, (180, 180, 210))
-        rule = font.render(f"PIPE SCORE: {score_per_pipe}", True, (180, 180, 210))
-        mode = font.render("BIRD: POWER" if bird_using_power else "BIRD: BASE", True, (180, 180, 210))
-
-        screen.blit(hud, (24, 18))
-        screen.blit(spd, (24, 46))
-        screen.blit(rule, (24, 74))
-        screen.blit(mode, (24, 102))
-
+        draw_scene()
         pygame.display.flip()

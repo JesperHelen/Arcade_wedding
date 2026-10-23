@@ -10,6 +10,9 @@ BTN_K3 = 2   # -> W
 BTN_K4 = 3   # -> A
 BTN_K5 = 4   # -> S
 BTN_K6 = 5   # -> D
+# Action 2 (knappen bredvid Action 1). Kolla numret med: jstest /dev/input/js0
+# (tryck Action 2 och se vilken Button som slår om) och ändra här om det inte stämmer.
+BTN_ACT2 = 6  # -> Q
 
 # ----------------------------
 # Axis config
@@ -23,7 +26,7 @@ _joy = None
 
 _prev = {
     "up": False, "down": False, "left": False, "right": False,
-    "esc": False, "enter": False,
+    "esc": False, "enter": False, "act2": False,
     "w": False, "a": False, "s": False, "d": False,
 }
 
@@ -51,7 +54,7 @@ def update():
     Kör EN gång per frame, innan du gör pygame.event.get().
     Skapar KEYDOWN/KEYUP events från joystick:
       - joystick riktning -> piltangenter
-      - K1..K6 -> ESC/ENTER/W/A/S/D
+      - K1..K6 -> ESC/ENTER/W/A/S/D, Action 2 -> Q
     """
     if not _inited:
         init()
@@ -104,6 +107,7 @@ def update():
             return False
 
     esc   = b(BTN_K1)
+    act2  = b(BTN_ACT2)
     enter = b(BTN_K2)
     w     = b(BTN_K3)
     a     = b(BTN_K4)
@@ -112,7 +116,7 @@ def update():
 
     now = {
         "left": left, "right": right, "up": up, "down": down,
-        "esc": esc, "enter": enter,
+        "esc": esc, "enter": enter, "act2": act2,
         "w": w, "a": a, "s": s, "d": d,
     }
 
@@ -133,6 +137,7 @@ def update():
     # Buttons
     edge("esc", pygame.K_ESCAPE)
     edge("enter", pygame.K_RETURN)
+    edge("act2", pygame.K_q)
 
     edge("w", pygame.K_w)
     edge("a", pygame.K_a)

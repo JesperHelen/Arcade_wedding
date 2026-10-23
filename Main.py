@@ -6,6 +6,7 @@ import pygame
 import importlib
 from datetime import date
 import joystick_keys as jk
+import controls
 
 import subprocess
 import re
@@ -17,6 +18,9 @@ import re
 FPS = 30
 
 TITLE = "Arcade Machine"
+
+# Sätt till False för att dölja knapplayouten i huvudmenyn
+SHOW_CONTROLS_ON_MENU = True
 MUSIC_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)),"Assets", "Music", "music_base_1.mp3")
 
 
@@ -791,6 +795,10 @@ class MainMenu:
 
         # Prebuild icon card backgrounds once (HUGE win)
         icon = 96
+
+        # Kolumnbredd efter längsta etiketten så att texterna under ikonerna inte går ihop
+        widest = max(self.item_font.size(item[2])[0] for item in self.items)
+        self.col_w = max(icon + 28, widest + 24)
         self.card_bg = pygame.Surface((icon, icon), pygame.SRCALPHA)
         self.card_bg_sel = pygame.Surface((icon, icon), pygame.SRCALPHA)
 
@@ -848,17 +856,22 @@ class MainMenu:
         self.screen.blit(self._cached_subtitle, self._cached_subtitle.get_rect(center=(self.w // 2, int(self.h * 0.24))))
 
         icon = 96
-        gap_x = 28
         gap_y = 56
         cols = self.cols
-        total_w = cols * icon + (cols - 1) * gap_x
+        col_w = self.col_w
+        total_w = cols * col_w
         start_x = (self.w - total_w) // 2
         start_y = int(self.h * 0.44)
+
+        if SHOW_CONTROLS_ON_MENU:
+            layout_w = min(420, start_x - 48)
+            layout_y = int(self.h * 0.40)
+            controls.draw_layout(self.screen, (24, layout_y, layout_w, self.h - layout_y - 24), "menu")
 
         for i, item in enumerate(self.items):
             cx = i % cols
             cy = i // cols
-            x = start_x + cx * (icon + gap_x)
+            x = start_x + cx * col_w + (col_w - icon) // 2
             y = start_y + cy * (icon + gap_y)
             r = pygame.Rect(x, y, icon, icon)
 
@@ -912,8 +925,8 @@ class MainMenu:
             self.ribbon_font,
             label,
             (255, 230, 140),
-            center=(int(self.w * 0.58), int(self.h * 0.40)),
-            angle_deg=-28,
+            center=(int(self.w * 0.62), int(self.h * 0.33)),
+            angle_deg=-8,
             shadow=True
         )
 
@@ -1019,7 +1032,7 @@ def main():
     # valfritt: sätt startvolym direkt när spelet startar
     vol_hud.set_value(set_system_volume_percent(50), show_seconds=1.5)
 
-    enter_down = False
+    vol_btn_down = False  # Action 2 (Q) hålls in
 
     # ---- music (loop forever) ----
     try:
@@ -1057,24 +1070,17 @@ def main():
             if event.type == pygame.QUIT:
                 pygame.quit()
                 sys.exit()
-            # Tracka Enter (för kombon Enter + Pil upp/ned)
-            if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_LEFT:
-                    enter_down = True
+            # Volym: håll Action 2 (Q) + upp/ned. Händelserna når inte skärmen under.
+            if event.type in (pygame.KEYDOWN, pygame.KEYUP) and event.key == pygame.K_q:
+                vol_btn_down = (event.type == pygame.KEYDOWN)
+                continue
+            if vol_btn_down and event.type == pygame.KEYDOWN and event.key in (pygame.K_UP, pygame.K_DOWN):
+                delta = 5 if event.key == pygame.K_UP else -5
+                vol_hud.set_value(change_system_volume(delta, vol_hud.value))
+                continue
+            if vol_btn_down and event.type == pygame.KEYUP and event.key in (pygame.K_UP, pygame.K_DOWN):
+                continue
 
-
-
-                # Enter + Upp/Ner => volym
-                if enter_down and event.key == pygame.K_UP:
-                    newv = change_system_volume(+5, vol_hud.value)
-                    vol_hud.set_value(newv)
-                elif enter_down and event.key == pygame.K_DOWN:
-                    newv = change_system_volume(-5, vol_hud.value)
-                    vol_hud.set_value(newv)
-
-            elif event.type == pygame.KEYUP:
-                if event.key == pygame.K_LEFT:
-                    enter_down = False
             if state == "initials":
                 act, payload = initials_ui.handle_event(event)
                 if act == "cancel":
@@ -1091,6 +1097,7 @@ def main():
                         initials_ui = None
 
                         res = run_game_by_index(screen, idx)
+                        vol_btn_down = False
                         if res["result"] == "quit":
                             state = "menu"
                             current = menu
@@ -1108,6 +1115,7 @@ def main():
                         initials_ui = None
 
                         res = run_competition(screen)
+                        vol_btn_down = False
                         if res["result"] == "quit":
                             state = "menu"
                             current = menu

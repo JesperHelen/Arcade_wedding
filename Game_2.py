@@ -1,6 +1,7 @@
 import random
 import pygame
 import joystick_keys as jk
+import controls
 from typing import Set, Tuple
 
 def run(screen):
@@ -207,7 +208,11 @@ def run(screen):
 
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
-                    return {"result": "quit", "score": int(score)}
+                    if controls.pause(screen, "snake") == "quit":
+                        return {"result": "quit", "score": int(score)}
+                    clock.tick()
+                    tick_accum = 0.0
+                    break
 
                 if dead and event.key in (pygame.K_RETURN, pygame.K_SPACE):
                     reset()

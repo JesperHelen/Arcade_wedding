@@ -2,6 +2,7 @@ import os
 import random
 import pygame
 import joystick_keys as jk
+import controls
 
 def run(screen):
     clock = pygame.time.Clock()
@@ -408,7 +409,11 @@ def run(screen):
 
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
-                    return {"result": "quit", "score": int(score)}
+                    if controls.pause(screen, "tetris") == "quit":
+                        return {"result": "quit", "score": int(score)}
+                    clock.tick()
+                    move_left = move_right = soft_drop = False
+                    break
 
                 elif event.key == pygame.K_LEFT:
                     move_left = True
@@ -426,7 +431,7 @@ def run(screen):
                     if can_place(cur_type, cur_rot, cur_x + 1, cur_y):
                         cur_x += 1
 
-                elif event.key == pygame.K_UP:
+                elif event.key in (pygame.K_UP, pygame.K_q):
                     rotate()
 
                 elif event.key == pygame.K_DOWN:
@@ -551,8 +556,8 @@ def run(screen):
             a = font.render(label, True, (200, 200, 220))
             b = font.render(str(value), True, TEXT)
             screen.blit(a, (panel_x + 18, text_y))
-            screen.blit(b, (panel_x + 18, text_y + 24))
-            text_y += 62
+            screen.blit(b, (panel_x + 18, text_y + font.get_linesize()))
+            text_y += font.get_linesize() * 2 + 12
 
         blit_label("SCORE", score)
         blit_label("LINES", lines)
@@ -562,7 +567,7 @@ def run(screen):
         # next piece preview
         label = font.render("NEXT", True, (200, 200, 220))
         screen.blit(label, (panel_x + 18, text_y))
-        preview_box = pygame.Rect(panel_x + 18, text_y + 32, 120, 120)
+        preview_box = pygame.Rect(panel_x + 18, text_y + font.get_linesize() + 6, 120, 120)
         pygame.draw.rect(screen, (22, 22, 36), preview_box, border_radius=14)
 
         px0, py0 = preview_box.x + 20, preview_box.y + 20
@@ -572,19 +577,8 @@ def run(screen):
             pygame.draw.rect(screen, COLORS[next_piece], rr, border_radius=max(3, mini // 6))
             pygame.draw.rect(screen, (255, 255, 255), rr, width=1, border_radius=max(3, mini // 6))
 
-        # Controls hint
-        hint = [
-            "← → flytta",
-            "↑ rotera",
-            "↓ soft drop",
-            "SPACE hard drop",
-            "ESC tillbaka",
-        ]
-        hy = oy + board_h - 10 - len(hint) * 22
-        for s in hint:
-            tx = font.render(s, True, (170, 170, 195))
-            screen.blit(tx, (panel_x + 18, hy))
-            hy += 22
+        hint = font.render("ESC = hjälp", True, (170, 170, 195))
+        screen.blit(hint, (panel_x + 18, oy + board_h - 10 - font.get_linesize()))
 
 
         pygame.display.flip()
