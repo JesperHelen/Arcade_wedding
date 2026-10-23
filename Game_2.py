@@ -90,6 +90,15 @@ def run(screen):
     head_imgs = None
     _head = load_img_safe("head.png")
     if _head is not None:
+        # klipp ut ansiktet med en oval så att fotots mörka bakgrund och hår försvinner
+        _mw, _mh = _head.get_size()
+        _mask = pygame.Surface((_mw, _mh), pygame.SRCALPHA)
+        _mask.fill((255, 255, 255, 0))
+        pygame.draw.ellipse(_mask, (255, 255, 255, 255),
+                            (int(_mw * 0.08), int(_mh * 0.06), int(_mw * 0.86), int(_mh * 0.88)))
+        _head = _head.copy()
+        _head.blit(_mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+
         target_h = int(CELL * 1.6)
         target_w = max(1, int(_head.get_width() * target_h / _head.get_height()))
         right = pygame.transform.smoothscale(_head, (target_w, target_h))
@@ -183,29 +192,43 @@ def run(screen):
         return bg
 
     def draw_block(x, y, ox, oy):
-        # klassiskt mörkt block med liten ljus kant inuti
+        # klassiskt block: svart ram, ljus springa och svart kärna
         r = pygame.Rect(ox + x * CELL + 2, oy + y * CELL + 2, CELL - 4, CELL - 4)
-        pygame.draw.rect(screen, C_INK, r)
-        inner = r.inflate(-max(6, CELL // 3), -max(6, CELL // 3))
-        pygame.draw.rect(screen, C_INK_SOFT, inner, 1)
+        pygame.draw.rect(screen, C_INK, r, 2)
+        gap = max(5, CELL // 6)
+        pygame.draw.rect(screen, C_INK, r.inflate(-2 * gap, -2 * gap))
 
     def draw_ring(x, y, ox, oy):
+        # vigselring: guldband i lätt perspektiv med en stor briljant i en fattning ovanpå
         cx, cy = cell_center(x, y, ox, oy)
-        cy += CELL // 10 + int(math.sin(now() * 3.0) * CELL * 0.06)
-        r = int(CELL * 0.34)
-        width = max(3, CELL // 7)
-        pygame.draw.circle(screen, C_INK, (cx, cy), r + 1, width + 2)
-        pygame.draw.circle(screen, GOLD, (cx, cy), r, width)
-        pygame.draw.arc(screen, GOLD_LIGHT, pygame.Rect(cx - r + 1, cy - r + 1, 2 * r - 2, 2 * r - 2), 1.0, 2.4, 2)
-        d = max(4, CELL // 5)
-        top = cy - r - d // 2
-        stone = [(cx, top - d), (cx + d, top), (cx, top + d), (cx - d, top)]
-        pygame.draw.polygon(screen, (235, 248, 255), stone)
+        cy += CELL // 5 + int(math.sin(now() * 3.0) * CELL * 0.05)
+        rw, rh = int(CELL * 0.60), int(CELL * 0.42)
+        band = max(4, CELL // 6)
+        ring = pygame.Rect(cx - rw, cy - rh, rw * 2, rh * 2)
+        pygame.draw.ellipse(screen, C_INK, ring.inflate(4, 4), band + 4)
+        pygame.draw.ellipse(screen, GOLD, ring, band)
+        pygame.draw.arc(screen, GOLD_LIGHT, ring.inflate(-band, -band), 1.9, 3.0, 2)
+        pygame.draw.ellipse(screen, (150, 105, 30), ring.inflate(-2 * band, -2 * band), 1)
+
+        # fattning (två klor) och briljanten
+        d = max(6, int(CELL * 0.30))
+        girdle = ring.top - d // 3
+        pygame.draw.line(screen, C_INK, (cx - d // 2, ring.top + 2), (cx - d // 2 - 2, girdle), 4)
+        pygame.draw.line(screen, C_INK, (cx + d // 2, ring.top + 2), (cx + d // 2 + 2, girdle), 4)
+        pygame.draw.line(screen, GOLD, (cx - d // 2, ring.top + 2), (cx - d // 2 - 2, girdle), 2)
+        pygame.draw.line(screen, GOLD, (cx + d // 2, ring.top + 2), (cx + d // 2 + 2, girdle), 2)
+        table = girdle - int(d * 0.6)
+        stone = [(cx - d, girdle), (cx - d // 2, table), (cx + d // 2, table), (cx + d, girdle), (cx, girdle + int(d * 0.9))]
+        pygame.draw.polygon(screen, (225, 242, 255), stone)
+        pygame.draw.polygon(screen, (255, 255, 255), [(cx - d // 2, table), (cx, table), (cx - d // 3, girdle)])
+        pygame.draw.line(screen, (150, 190, 220), (cx - d, girdle), (cx + d, girdle), 1)
+        pygame.draw.line(screen, (150, 190, 220), (cx + d // 2, table), (cx, girdle + int(d * 0.9)), 1)
         pygame.draw.polygon(screen, C_INK, stone, 2)
+
         tw = (math.sin(now() * 4.0) + 1) / 2
         if tw > 0.6:
-            sz = int(d * 1.4 * (tw - 0.6) / 0.4) + 1
-            gx, gy = cx + d + 1, top - d - 1
+            sz = int(d * 0.9 * (tw - 0.6) / 0.4) + 2
+            gx, gy = cx + d, table - 2
             pygame.draw.line(screen, (255, 255, 255), (gx - sz, gy), (gx + sz, gy), 2)
             pygame.draw.line(screen, (255, 255, 255), (gx, gy - sz), (gx, gy + sz), 2)
 
@@ -577,7 +600,6 @@ def run(screen):
             img = head_imgs.get(direction, head_imgs[(1, 0)])
             rect = img.get_rect(center=hc)
             screen.blit(img, rect)
-            pygame.draw.ellipse(screen, C_INK, rect.inflate(4, 4), 3)
         else:
             draw_block(hx, hy, ox, oy)
 
