@@ -864,9 +864,11 @@ class MainMenu:
         start_y = int(self.h * 0.44)
 
         if SHOW_CONTROLS_ON_MENU:
-            layout_w = min(420, start_x - 48)
-            layout_y = int(self.h * 0.40)
-            controls.draw_layout(self.screen, (24, layout_y, layout_w, self.h - layout_y - 24), "menu")
+            grid_bottom = start_y + 2 * icon + gap_y + 40
+            layout_w = min(820, self.w - 48)
+            layout_h = min(180, self.h - grid_bottom - 24)
+            controls.draw_layout(self.screen, ((self.w - layout_w) // 2, grid_bottom + 12, layout_w, layout_h),
+                                 "menu", alpha=140)
 
         for i, item in enumerate(self.items):
             cx = i % cols

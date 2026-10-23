@@ -13,6 +13,7 @@ BTN_K6 = 5   # -> D
 # Action 2 (knappen bredvid Action 1). Kolla numret med: jstest /dev/input/js0
 # (tryck Action 2 och se vilken Button som slår om) och ändra här om det inte stämmer.
 BTN_ACT2 = 6  # -> Q
+BTN_COIN = 7  # Coin: används inte i spelen, visas bara i knapppanelen. Kolla numret med jstest.
 
 # ----------------------------
 # Axis config
@@ -26,7 +27,7 @@ _joy = None
 
 _prev = {
     "up": False, "down": False, "left": False, "right": False,
-    "esc": False, "enter": False, "act2": False,
+    "esc": False, "enter": False, "act2": False, "coin": False,
     "w": False, "a": False, "s": False, "d": False,
 }
 
@@ -108,6 +109,7 @@ def update():
 
     esc   = b(BTN_K1)
     act2  = b(BTN_ACT2)
+    coin  = b(BTN_COIN)
     enter = b(BTN_K2)
     w     = b(BTN_K3)
     a     = b(BTN_K4)
@@ -116,7 +118,7 @@ def update():
 
     now = {
         "left": left, "right": right, "up": up, "down": down,
-        "esc": esc, "enter": enter, "act2": act2,
+        "esc": esc, "enter": enter, "act2": act2, "coin": coin,
         "w": w, "a": a, "s": s, "d": d,
     }
 
@@ -143,3 +145,24 @@ def update():
     edge("a", pygame.K_a)
     edge("s", pygame.K_s)
     edge("d", pygame.K_d)
+
+    _prev["coin"] = coin
+
+
+def pressed():
+    """Vilka knappar/riktningar på joysticken som är nedtryckta just nu (för knapppanelen)."""
+    return dict(_prev)
+
+
+def raw_buttons():
+    """Numren på alla joystickknappar som hålls in just nu (för felsökning)."""
+    if _joy is None:
+        return []
+    out = []
+    for i in range(_joy.get_numbuttons()):
+        try:
+            if _joy.get_button(i):
+                out.append(i)
+        except Exception:
+            pass
+    return out
