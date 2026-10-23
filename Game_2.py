@@ -9,10 +9,10 @@ from typing import Set, Tuple
 
 def run(screen):
     clock = pygame.time.Clock()
-    SERIF = "georgia,dejavuserif,liberationserif,serif"
-    serif_big = pygame.font.SysFont(SERIF, 44, bold=True)
-    serif_mid = pygame.font.SysFont(SERIF, 22)
-    serif_tiny = pygame.font.SysFont(SERIF, 15, bold=True)
+    SANS = "dejavusans,liberationsans,arial,sans"
+    font_big = pygame.font.SysFont(SANS, 40)
+    font_mid = pygame.font.SysFont(SANS, 20)
+    font_small = pygame.font.SysFont(SANS, 16, bold=True)
 
     # ---- Settings ----
     CELL = 30
@@ -101,12 +101,17 @@ def run(screen):
         }
 
     # ---- Helpers ----
+    TOP_BAR = 84   # plats för poäng/rekord ovanför spelplanen
+    MARGIN = 16
+
     def grid_size():
         w, h = screen.get_size()
-        cols = w // CELL
-        rows = h // CELL
+        avail_w = w - 2 * MARGIN
+        avail_h = h - TOP_BAR - MARGIN
+        cols = avail_w // CELL
+        rows = avail_h // CELL
         ox = (w - cols * CELL) // 2
-        oy = (h - rows * CELL) // 2
+        oy = TOP_BAR + (avail_h - rows * CELL) // 2
         return w, h, cols, rows, ox, oy
 
     def spawn_bounds(cols, rows):
@@ -129,28 +134,33 @@ def run(screen):
     def cell_center(x, y, ox, oy):
         return ox + x * CELL + CELL // 2, oy + y * CELL + CELL // 2
 
-    # ---- Premium-stil: natthimmel, guld och pärlvitt ----
-    GOLD = (232, 196, 110)
-    GOLD_DARK = (160, 120, 55)
-    GOLD_LIGHT = (255, 240, 190)
+    # ---- Klassisk stil (gammal mobil-LCD) med ansiktet, ringar och hjärtan ----
+    C_BG = (74, 99, 97)          # runt spelplanen
+    C_LCD = (172, 178, 160)      # spelplanen
+    C_TILE = (160, 166, 148)     # rutmönstret
+    C_TILE_EDGE = (182, 188, 170)
+    C_INK = (24, 28, 24)         # ormen och konturer
+    C_INK_SOFT = (62, 68, 60)
+    C_TEXT = (240, 244, 240)
+    GOLD = (226, 178, 60)
+    GOLD_LIGHT = (255, 232, 150)
 
     def now():
         return pygame.time.get_ticks() / 1000.0
 
-    _glow_cache = {}
+    def read_best():
+        try:
+            with open(os.path.join(base_dir(), "Game_2.txt"), "r", encoding="utf-8") as f:
+                vals = []
+                for line in f:
+                    parts = line.strip().split(",")
+                    if len(parts) >= 2 and parts[1].strip().isdigit():
+                        vals.append(int(parts[1]))
+                return max(vals) if vals else 0
+        except Exception:
+            return 0
 
-    def blit_glow(cx, cy, radius, color, strength=90):
-        key = (radius, color, strength)
-        g = _glow_cache.get(key)
-        if g is None:
-            g = pygame.Surface((radius * 2, radius * 2), pygame.SRCALPHA)
-            steps = 18
-            for i in range(steps, 0, -1):
-                k = i / steps
-                a = min(255, int(strength * 1.8 * (1 - k) ** 1.5))
-                pygame.draw.circle(g, (*color, a), (radius, radius), max(1, int(radius * k)))
-            _glow_cache[key] = g
-        screen.blit(g, (cx - radius, cy - radius))
+    best_score = read_best()
 
     _bg_cache = {}
 
@@ -159,149 +169,90 @@ def run(screen):
         bg = _bg_cache.get(key)
         if bg is not None:
             return bg
-
         bg = pygame.Surface((w, h))
-        top, bot = (32, 18, 46), (8, 8, 14)
-        for y in range(h):
-            f = y / max(1, h - 1)
-            bg.fill(tuple(int(top[i] + (bot[i] - top[i]) * f) for i in range(3)), (0, y, w, 1))
-
-        # vinjett mot kanterna
-        vig = pygame.Surface((w, h), pygame.SRCALPHA)
-        steps = 30
-        band = max(2, min(w, h) // (2 * steps) + 1)
-        for i in range(steps):
-            a = int(120 * (1 - i / steps) ** 2)
-            pygame.draw.rect(vig, (0, 0, 0, a), pygame.Rect(i * band, i * band, w - 2 * i * band, h - 2 * i * band), band)
-        bg.blit(vig, (0, 0))
-
-        # diskret rutnät: små prickar i rutornas hörn
-        for gx in range(cols + 1):
-            for gy in range(rows + 1):
-                bg.fill((58, 48, 78), (ox + gx * CELL, oy + gy * CELL, 2, 2))
-
-        # guldram med svag glöd
-        frame = pygame.Surface((w, h), pygame.SRCALPHA)
-        border = pygame.Rect(ox, oy, cols * CELL, rows * CELL)
-        for grow, a in ((5, 22), (3, 40), (1, 70)):
-            pygame.draw.rect(frame, (*GOLD, a), border.inflate(grow * 2, grow * 2), width=2, border_radius=18)
-        pygame.draw.rect(frame, (*GOLD, 200), border, width=2, border_radius=16)
-        bg.blit(frame, (0, 0))
-
+        bg.fill(C_BG)
+        board = pygame.Rect(ox, oy, cols * CELL, rows * CELL)
+        pygame.draw.rect(bg, C_LCD, board.inflate(12, 12))
+        inset = max(3, CELL // 6)
+        for gx in range(cols):
+            for gy in range(rows):
+                r = pygame.Rect(ox + gx * CELL + inset, oy + gy * CELL + inset, CELL - 2 * inset, CELL - 2 * inset)
+                bg.fill(C_TILE, r)
+                pygame.draw.rect(bg, C_TILE_EDGE, r, 1)
         _bg_cache[key] = bg
         return bg
 
+    def draw_block(x, y, ox, oy):
+        # klassiskt mörkt block med liten ljus kant inuti
+        r = pygame.Rect(ox + x * CELL + 2, oy + y * CELL + 2, CELL - 4, CELL - 4)
+        pygame.draw.rect(screen, C_INK, r)
+        inner = r.inflate(-max(6, CELL // 3), -max(6, CELL // 3))
+        pygame.draw.rect(screen, C_INK_SOFT, inner, 1)
+
     def draw_ring(x, y, ox, oy):
         cx, cy = cell_center(x, y, ox, oy)
-        cy += CELL // 10 + int(math.sin(now() * 3.0) * CELL * 0.08)
-        r = int(CELL * 0.36)
+        cy += CELL // 10 + int(math.sin(now() * 3.0) * CELL * 0.06)
+        r = int(CELL * 0.34)
         width = max(3, CELL // 7)
-        blit_glow(cx, cy, int(CELL * 1.1), GOLD, 110)
-        pygame.draw.circle(screen, GOLD_DARK, (cx, cy), r, width)
-        pygame.draw.circle(screen, GOLD, (cx, cy), r - 1, max(1, width - 2))
-        pygame.draw.arc(screen, GOLD_LIGHT, pygame.Rect(cx - r + 1, cy - r + 1, 2 * r - 2, 2 * r - 2), 1.0, 2.6, 2)
-
+        pygame.draw.circle(screen, C_INK, (cx, cy), r + 1, width + 2)
+        pygame.draw.circle(screen, GOLD, (cx, cy), r, width)
+        pygame.draw.arc(screen, GOLD_LIGHT, pygame.Rect(cx - r + 1, cy - r + 1, 2 * r - 2, 2 * r - 2), 1.0, 2.4, 2)
         d = max(4, CELL // 5)
         top = cy - r - d // 2
         stone = [(cx, top - d), (cx + d, top), (cx, top + d), (cx - d, top)]
-        pygame.draw.polygon(screen, (200, 232, 255), stone)
-        pygame.draw.polygon(screen, (255, 255, 255), [(cx, top - d), (cx + d, top), (cx, top)])
-        pygame.draw.polygon(screen, (140, 185, 225), stone, 1)
-
-        # glimt i diamanten
+        pygame.draw.polygon(screen, (235, 248, 255), stone)
+        pygame.draw.polygon(screen, C_INK, stone, 2)
         tw = (math.sin(now() * 4.0) + 1) / 2
-        if tw > 0.55:
-            sz = int(d * 1.6 * (tw - 0.55) / 0.45) + 1
-            gx, gy = cx + d, top - d
-            pygame.draw.line(screen, (255, 255, 255), (gx - sz, gy), (gx + sz, gy), 1)
-            pygame.draw.line(screen, (255, 255, 255), (gx, gy - sz), (gx, gy + sz), 1)
+        if tw > 0.6:
+            sz = int(d * 1.4 * (tw - 0.6) / 0.4) + 1
+            gx, gy = cx + d + 1, top - d - 1
+            pygame.draw.line(screen, (255, 255, 255), (gx - sz, gy), (gx + sz, gy), 2)
+            pygame.draw.line(screen, (255, 255, 255), (gx, gy - sz), (gx, gy + sz), 2)
+
+    def heart_points(cx, cy, r):
+        return [(cx - 2 * r, cy - r // 4), (cx + 2 * r, cy - r // 4), (cx, cy + int(r * 2.2))]
 
     def draw_heart(x, y, ox, oy):
         cx, cy = cell_center(x, y, ox, oy)
-        pulse = 1.0 + 0.09 * math.sin(now() * 5.0 + x * 0.7 + y * 1.3)
+        pulse = 1.0 + 0.08 * math.sin(now() * 5.0 + x * 0.7 + y * 1.3)
         r = max(3, int(CELL * 0.18 * pulse))
-        blit_glow(cx, cy, int(CELL * 0.9), (255, 90, 130), 90)
-        col = (226, 52, 88)
-        pygame.draw.circle(screen, col, (cx - r, cy - r // 2), r)
-        pygame.draw.circle(screen, col, (cx + r, cy - r // 2), r)
-        pygame.draw.polygon(screen, col, [(cx - 2 * r, cy - r // 4), (cx + 2 * r, cy - r // 4), (cx, cy + int(r * 2.2))])
-        pygame.draw.circle(screen, (255, 185, 205), (cx - r - r // 3, cy - r), max(1, r // 3))
+        # kontur först, sedan fyllning
+        for col, grow in ((C_INK, 2), ((214, 40, 60), 0)):
+            pygame.draw.circle(screen, col, (cx - r, cy - r // 2), r + grow)
+            pygame.draw.circle(screen, col, (cx + r, cy - r // 2), r + grow)
+            pts = heart_points(cx, cy, r)
+            if grow:
+                pts = [(pts[0][0] - grow, pts[0][1]), (pts[1][0] + grow, pts[1][1]), (pts[2][0], pts[2][1] + grow * 2)]
+            pygame.draw.polygon(screen, col, pts)
+        pygame.draw.circle(screen, (255, 170, 180), (cx - r - r // 3, cy - r), max(1, r // 3))
 
-    def draw_gem(x, y, ox, oy, color, light, rem):
+    def draw_gem(x, y, ox, oy, color, rem):
+        # bonus = snedställd ruta som i klassiska Snake, med en ram som krymper när tiden går
         cx, cy = cell_center(x, y, ox, oy)
-        r = int(CELL * 0.30)
-        blit_glow(cx, cy, int(CELL * 1.0), color, 100)
-        pygame.draw.circle(screen, color, (cx, cy), r)
-        pygame.draw.circle(screen, light, (cx - r // 3, cy - r // 3), max(2, r // 3))
-        pygame.draw.circle(screen, (255, 255, 255), (cx, cy), r, 1)
-        # ringen runt krymper när tiden den ligger kvar rinner ut
-        rr = int(CELL * 0.50)
-        if rem > 0:
-            pygame.draw.arc(screen, light, pygame.Rect(cx - rr, cy - rr, 2 * rr, 2 * rr),
-                            math.pi / 2, math.pi / 2 + 2 * math.pi * rem, 2)
+        r = int(CELL * 0.46)
+        diamond = [(cx, cy - r), (cx + r, cy), (cx, cy + r), (cx - r, cy)]
+        pygame.draw.polygon(screen, color, diamond)
+        pygame.draw.polygon(screen, C_INK, diamond, 2)
+        k = max(0.0, min(1.0, rem))
+        ri = max(2, int(r * 0.45 * k))
+        pygame.draw.polygon(screen, C_INK, [(cx, cy - ri), (cx + ri, cy), (cx, cy + ri), (cx - ri, cy)])
 
-    def draw_veil(body, ox, oy):
-        # Kroppen som ett pärlvitt brudslöjesläp med skugga och ett skimmer som vandrar längs släpet
-        if not body:
-            return
-        n = len(body)
-        pad = max(2, CELL // 10)
-        sh_off = 4
-        min_x = min(c[0] for c in body)
-        min_y = min(c[1] for c in body)
-        max_x = max(c[0] for c in body)
-        max_y = max(c[1] for c in body)
-        bx = ox + min_x * CELL
-        by = oy + min_y * CELL
-        size = ((max_x - min_x + 1) * CELL + sh_off, (max_y - min_y + 1) * CELL + sh_off)
-        shadow = pygame.Surface(size, pygame.SRCALPHA)
-        layer = pygame.Surface(size, pygame.SRCALPHA)
-
-        shimmer = (now() * 7.0) % (n + 8) - 4
-        for i, (sx, sy) in enumerate(body):
-            f = i / max(1, n - 1)
-            glint = max(0.0, 1.0 - abs(i - shimmer) / 2.5)
-            col = (min(255, int(250 - 75 * f + 30 * glint)),
-                   min(255, int(246 - 75 * f + 30 * glint)),
-                   min(255, int(240 - 55 * f + 30 * glint)))
-            lx, ly = (sx - min_x) * CELL, (sy - min_y) * CELL
-            rect = pygame.Rect(lx + pad, ly + pad, CELL - 2 * pad, CELL - 2 * pad)
-            shapes = [rect]
-            if i + 1 < n:
-                nx2, ny2 = body[i + 1][0] - min_x, body[i + 1][1] - min_y
-                shapes.append(pygame.Rect(min(lx, nx2 * CELL) + pad, min(ly, ny2 * CELL) + pad,
-                                          abs(lx - nx2 * CELL) + CELL - 2 * pad, abs(ly - ny2 * CELL) + CELL - 2 * pad))
-            for shp in shapes:
-                pygame.draw.rect(shadow, (0, 0, 0, 80), shp.move(sh_off, sh_off), border_radius=CELL // 3)
-                pygame.draw.rect(layer, col, shp, border_radius=CELL // 3)
-            # spets
-            cx, cy = rect.center
-            lace = (col[0] - 28, col[1] - 28, col[2] - 22)
-            q = CELL // 5
-            for ddx, ddy, rad in ((-q, -q, 2), (q, q, 2), (q, -q, 1), (-q, q, 1)):
-                pygame.draw.circle(layer, lace, (cx + ddx, cy + ddy), rad)
-
-        screen.blit(shadow, (bx, by))
-        screen.blit(layer, (bx, by))
-
-    # ---- Gnistor och "+5" ----
-    particles = []  # [x, y, vx, vy, life, ttl, color, size]
+    # ---- Små klassiska "pixlar" och "+5" när man äter ----
+    particles = []  # [x, y, vx, vy, life, ttl, color]
     floaters = []   # [x, y, life, ttl, text]
 
     def burst(cx, cy, color):
-        for _ in range(22):
+        for _ in range(14):
             ang = random.uniform(0, math.tau)
-            spd = random.uniform(60, 220)
-            ttl = random.uniform(0.35, 0.7)
+            spd = random.uniform(60, 180)
+            ttl = random.uniform(0.3, 0.55)
             particles.append([cx, cy, math.cos(ang) * spd, math.sin(ang) * spd, ttl, ttl,
-                              random.choice((color, (255, 255, 255))), random.uniform(1.5, 3.5)])
-        floaters.append([cx, cy - CELL // 2, 0.9, 0.9, "+5"])
+                              random.choice((color, C_INK))])
+        floaters.append([cx, cy - CELL // 2, 0.8, 0.8, "+5"])
 
     def update_fx(dt):
         for p in particles:
             p[4] -= dt
-            p[2] *= (1.0 - 2.0 * dt)
-            p[3] *= (1.0 - 2.0 * dt)
             p[0] += p[2] * dt
             p[1] += p[3] * dt
         particles[:] = [p for p in particles if p[4] > 0]
@@ -311,44 +262,42 @@ def run(screen):
         floaters[:] = [fl for fl in floaters if fl[2] > 0]
 
     def draw_fx():
-        for x, y, _vx, _vy, life, ttl, col, size in particles:
-            k = life / ttl
-            pygame.draw.circle(screen, tuple(int(c * k) for c in col), (int(x), int(y)), max(1, int(size * (0.5 + 0.5 * k))))
+        for x, y, _vx, _vy, life, ttl, col in particles:
+            sz = max(2, int(5 * life / ttl))
+            screen.fill(col, (int(x) - sz // 2, int(y) - sz // 2, sz, sz))
         for x, y, life, ttl, text in floaters:
-            img = serif_tiny.render(text, True, GOLD_LIGHT)
+            img = font_small.render(text, True, C_INK)
             img.set_alpha(int(255 * life / ttl))
             screen.blit(img, img.get_rect(center=(int(x), int(y))))
 
-    def draw_hud():
-        label = serif_tiny.render("POÄNG", True, (200, 188, 165))
-        value = serif_big.render(str(score), True, GOLD)
+    def draw_top_bar(w, ox, cols):
+        left = ox
+        right = ox + cols * CELL
+        val = font_big.render(str(score), True, C_TEXT)
+        lab = font_mid.render("Poäng", True, C_TEXT)
+        screen.blit(val, (left, 8))
+        screen.blit(lab, (left, 8 + val.get_height() - 4))
+
+        best = max(best_score, score)
+        bval = font_big.render(str(best), True, C_TEXT)
+        blab = font_mid.render("Rekord", True, C_TEXT)
+        screen.blit(bval, bval.get_rect(topright=(right, 8)))
+        screen.blit(blab, blab.get_rect(topright=(right, 8 + bval.get_height() - 4)))
+
+        # aktiva bonusar i mitten
         effects = []
         if rage_time > 0:
-            effects.append(("RAGE", rage_time / RAGE_DURATION, (240, 200, 110)))
+            effects.append((f"RAGE {rage_time:0.0f}s", (226, 178, 60)))
         if slowmo_time > 0:
-            effects.append(("SLOWMO", slowmo_time / SLOWMO_DURATION, (120, 175, 255)))
-
-        pad = 14
-        pill_w, pill_h = 150, 22
-        pw = max(label.get_width(), value.get_width(), pill_w if effects else 0) + pad * 2
-        ph = pad + label.get_height() + value.get_height() + len(effects) * (pill_h + 6) + pad
-        panel = pygame.Surface((pw, ph), pygame.SRCALPHA)
-        pygame.draw.rect(panel, (12, 8, 20, 165), panel.get_rect(), border_radius=14)
-        pygame.draw.rect(panel, (*GOLD, 90), panel.get_rect(), 1, border_radius=14)
-        y = pad
-        panel.blit(label, (pad, y))
-        y += label.get_height()
-        panel.blit(value, (pad, y))
-        y += value.get_height() + 4
-        for name, frac, col in effects:
-            pill = pygame.Rect(pad, y, pill_w, pill_h)
-            pygame.draw.rect(panel, (255, 255, 255, 28), pill, border_radius=pill_h // 2)
-            fill = pygame.Rect(pad, y, max(pill_h, int(pill_w * frac)), pill_h)
-            pygame.draw.rect(panel, (*col, 150), fill, border_radius=pill_h // 2)
-            t_img = serif_tiny.render(name, True, (255, 255, 255))
-            panel.blit(t_img, t_img.get_rect(midleft=(pad + 10, y + pill_h // 2)))
-            y += pill_h + 6
-        screen.blit(panel, (24, 18))
+            effects.append((f"SLOWMO {slowmo_time:0.0f}s", (110, 160, 230)))
+        x = w // 2 - (len(effects) * 150 - 10) // 2
+        for text, col in effects:
+            pill = pygame.Rect(x, 28, 140, 28)
+            pygame.draw.rect(screen, col, pill, border_radius=14)
+            pygame.draw.rect(screen, C_INK, pill, 2, border_radius=14)
+            t_img = font_small.render(text, True, C_INK)
+            screen.blit(t_img, t_img.get_rect(center=pill.center))
+            x += 150
 
     def spawn_free_cell(cols, rows, occupied):
 
@@ -605,13 +554,13 @@ def run(screen):
         # ---- Draw ----
         screen.blit(background(w, h, cols, rows, ox, oy), (0, 0))
 
-        # bonusar som glödande ädelstenar
+        # bonusar
         if "rage" in powerups:
             x, y = powerups["rage"]["pos"]
-            draw_gem(x, y, ox, oy, (240, 200, 110), (255, 240, 205), powerups["rage"]["time"] / POWERUP_LIFETIME)
+            draw_gem(x, y, ox, oy, (226, 178, 60), powerups["rage"]["time"] / POWERUP_LIFETIME)
         if "slowmo" in powerups:
             x, y = powerups["slowmo"]["pos"]
-            draw_gem(x, y, ox, oy, (110, 170, 255), (205, 228, 255), powerups["slowmo"]["time"] / POWERUP_LIFETIME)
+            draw_gem(x, y, ox, oy, (110, 160, 230), powerups["slowmo"]["time"] / POWERUP_LIFETIME)
 
         # ring (huvudäpplet) och hjärtan (rage-äpplen)
         ax, ay = main_apple
@@ -619,26 +568,26 @@ def run(screen):
         for (ex, ey) in extra_apples:
             draw_heart(ex, ey, ox, oy)
 
-        # slöjan (kroppen) och huvudet
-        draw_veil(snake[1:], ox, oy)
+        # kroppen som klassiska block, huvudet som ansiktet
+        for (sx, sy) in snake[1:]:
+            draw_block(sx, sy, ox, oy)
         hx, hy = snake[0]
         hc = cell_center(hx, hy, ox, oy)
         if head_imgs is not None:
             img = head_imgs.get(direction, head_imgs[(1, 0)])
             rect = img.get_rect(center=hc)
-            blit_glow(hc[0] + 3, hc[1] + 5, int(max(rect.w, rect.h) * 0.62), (0, 0, 0), 150)
             screen.blit(img, rect)
-            pygame.draw.ellipse(screen, GOLD, rect.inflate(6, 6), 2)
+            pygame.draw.ellipse(screen, C_INK, rect.inflate(4, 4), 3)
         else:
-            draw_cell(hx, hy, (250, 246, 240), ox, oy, r=8)
+            draw_block(hx, hy, ox, oy)
 
         draw_fx()
-        draw_hud()
+        draw_top_bar(w, ox, cols)
 
         if dead:
-            msg = serif_big.render("GAME OVER", True, (240, 240, 255))
+            msg = font_big.render("GAME OVER", True, C_INK)
             screen.blit(msg, msg.get_rect(center=(w // 2, int(h * 0.42))))
-            msg2 = serif_mid.render("Enter/Space = retry   ESC = tillbaka", True, (200, 200, 215))
+            msg2 = font_mid.render("Enter/Space = retry   ESC = tillbaka", True, C_INK)
             screen.blit(msg2, msg2.get_rect(center=(w // 2, int(h * 0.50))))
 
         pygame.display.flip()
